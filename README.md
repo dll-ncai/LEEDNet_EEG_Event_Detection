@@ -9,7 +9,7 @@ This repository contains the source code for 'REEDNet: An Efficient Network for 
 
 REEDNet is a compact 1D deep learning model designed to classify EEG events directly from raw signals with minimal preprocessing. Compared to large-scale vision backbones (GoogLeNet, VGG16), REEDNet achieves competitive diagnostic accuracy while requiring over 100× fewer FLOPs and parameters, making it well suited for real-time, resource-constrained clinical settings.
 
-[//]: * Muhammad Ali Alqarni, Hira Masood, Hassan Aqeel Khan, Awais Mehmood Kamboh, Saima Shafait, Tooba Jaffary and Faisal Shafait (2025) * **"REEDNet: An Efficient Network for Event Detection from Raw EEG Signals",** IEEE Access. doi: ()
+* Muhammad Ali Alqarni, Hira Masood, Hassan Aqeel Khan, Awais Mehmood Kamboh, Saima Shafait, Tooba Jaffary and Faisal Shafait (2025) * **"REEDNet: An Efficient Network for Event Detection from Raw EEG Signals",** IEEE Access. doi: ()
 
 # Requirements
 1. Install mne library available at https://github.com/mne-tools/mne-python
