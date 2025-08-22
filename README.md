@@ -1,1 +1,1 @@
-# REEDNet_EEG_Event_Detection
+REEDNet EEG Event Detection:
