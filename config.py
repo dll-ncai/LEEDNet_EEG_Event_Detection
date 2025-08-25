@@ -1,0 +1,7 @@
+files_list_csv = "/media/dll-1/SSD 4TB/EEG Datasets/experiment/nouman_conv_2/meta_data.csv"
+train_data_csv = "/media/dll-1/SSD 4TB/EEG Datasets/experiment/nouman_conv_2/train.csv"
+val_data_csv = "/media/dll-1/SSD 4TB/EEG Datasets/experiment/nouman_conv_2/eval.csv"
+test_data_csv = "/media/dll-1/SSD 4TB/EEG Datasets/experiment/nouman_conv_2/test.csv"
+prediction_saving_csv_train = "/media/dll-1/SSD 4TB/EEG Datasets/experiment/nouman_conv_2/predictions/predictions_train_conv_crops.csv"
+prediction_saving_csv_eval = "/media/dll-1/SSD 4TB/EEG Datasets/experiment/nouman_conv_2/predictions/predictions_eval_conv_crops.csv"
+prediction_saving_csv_test = "/media/dll-1/SSD 4TB/EEG Datasets/experiment/nouman_conv_2/predictions/predictions_test_conv_crops.csv"
