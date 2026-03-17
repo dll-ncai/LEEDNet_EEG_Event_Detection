@@ -7,6 +7,7 @@ import pywt
 from scipy.signal import lfilter, bessel
 from tqdm import tqdm
 from vmdpy import VMD
+from scipy.stats import kurtosis, skew, entropy
 
 # --- Pre-processing Functions ---
 
@@ -54,6 +55,36 @@ def vmd_decompose(signal, n_modes=5):
     # alpha=2000, tau=0, K=n_modes, DC=0, init=1, tol=1e-7
     u, u_hat, omega = VMD(signal, 2000, 0, n_modes, 0, 1, 1e-7)
     return u # [n_modes, T]
+
+def extract_vmd_features(imfs, fs=200):
+    all_feats = []
+    for imf in imfs:
+        # Energy features
+        energy = np.sum(imf**2)
+        
+        # Statistical features
+        m = np.mean(imf)
+        v = np.var(imf)
+        s = np.std(imf)
+        k = kurtosis(imf)
+        sk = skew(imf)
+        
+        # Entropy features
+        p = np.abs(imf) + 1e-12
+        p /= np.sum(p)
+        h = entropy(p)
+        
+        # Frequency-domain features
+        fft = np.fft.rfft(imf)
+        mags = np.abs(fft)
+        freqs = np.fft.rfftfreq(len(imf), d=1/fs)
+        sum_mags = np.sum(mags) + 1e-12
+        centroid = np.sum(freqs * mags) / sum_mags
+        bandwidth = np.sqrt(np.sum(((freqs - centroid)**2) * mags) / sum_mags)
+        peak_freq = freqs[np.argmax(mags)]
+        
+        all_feats.extend([energy, m, v, s, k, sk, h, centroid, bandwidth, peak_freq])
+    return np.array(all_feats, dtype=np.float32)
 
 # --- Main Script ---
 
@@ -122,6 +153,18 @@ def preprocess_experiment(exp_id, csv_files, base_save_dir, device):
                 # raw_data is 1D, so filtered is 1D
                 spec = np.abs(stft(filtered, fs=200, nperseg=64, noverlap=32)[2])**2
                 feat = spec.astype(np.float32)
+            elif exp_id == 24: # Sequential VMD -> CWT
+                filtered = bessel_bandpass(raw_data)
+                imfs = vmd_decompose(filtered, n_modes=5)
+                cwt_results = []
+                for i in range(imfs.shape[0]):
+                    coeffs, _ = pywt.cwt(imfs[i], np.arange(1, 31), 'cmor1.5-1.0', sampling_period=1/200)
+                    cwt_results.append(np.abs(coeffs))
+                feat = np.mean(np.stack(cwt_results, axis=0), axis=0).astype(np.float32)
+            elif exp_id == 25: # VMD Hand-crafted Features
+                filtered = bessel_bandpass(raw_data)
+                imfs = vmd_decompose(filtered, n_modes=5)
+                feat = extract_vmd_features(imfs).astype(np.float32) # [50]
             
             # Save
             np.save(save_path, feat)
@@ -157,7 +200,9 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
     
     # Run pre-processing for all experiments (1 through 9)
-    for i in range(1, 10):
-        preprocess_experiment(i, csv_files, base_save_dir, device)
+    preprocess_experiment(25, csv_files, base_save_dir, device)
+
+    # for i in range(1, 10):
+    #     preprocess_experiment(i, csv_files, base_save_dir, device)
     
     print("\\nAll pre-processing complete!")

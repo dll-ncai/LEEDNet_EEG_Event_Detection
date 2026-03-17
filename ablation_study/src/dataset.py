@@ -56,14 +56,22 @@ class EEGDataset(Dataset):
                 feat_flat = feat.flatten()
                 x1 = torch.tensor(feat_flat, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
             elif feat.ndim == 2 and feat.shape[0] == 33 and feat.shape[1] == 14:
-                # Precomputed STFT/FFT spectrum [33, 14]
-                x2 = torch.tensor(feat, dtype=torch.float32).unsqueeze(0)
-            # If it's 2D CWT [30, 400], it belongs to Branch 2
+                # x2 = torch.tensor(feat, dtype=torch.float32).unsqueeze(0)
+                pass # Handled in combo-branch loading
+            # If it's 2D VMD [5, 400]
+            elif feat.ndim == 2 and feat.shape[0] == 5 and feat.shape[1] == 400:
+                if self.wavelet_type == 'vmd':
+                    x3 = torch.tensor(feat, dtype=torch.float32).unsqueeze(0)
+                elif self.wavelet_type == 'vmd_cwt':
+                    x3_vmd_raw = feat 
+            # If it's 2D CWT [30, 400] (Standard or VMD-CWT precomputed)
             elif feat.ndim == 2 and feat.shape[0] == 30 and feat.shape[1] == 400:
                 x3 = torch.tensor(feat, dtype=torch.float32).unsqueeze(0)
                 
             # --- Dynamic Fallback for missing combinatory branches ---
-            if (0 in self.active_branches and x1.sum() == 0) or (1 in self.active_branches and x2.sum() == 0):
+            if (0 in self.active_branches and x1.sum() == 0) or \
+               (1 in self.active_branches and x2.sum() == 0) or \
+               (2 in self.active_branches and x3.sum() == 0):
                 npz_name = os.path.basename(file_path).replace('.npy', '.npz')
                 
                 # 1. Try to load precomputed FFT if we need it
@@ -76,8 +84,16 @@ class EEGDataset(Dataset):
                         if fft_feat.ndim == 2 and fft_feat.shape[0] == 33 and fft_feat.shape[1] == 14:
                             x2 = torch.tensor(fft_feat, dtype=torch.float32).unsqueeze(0)
                 
-                # 2. If we still need raw data (for branch 0 or if FFT was missing)
-                if (0 in self.active_branches and x1.sum() == 0) or (1 in self.active_branches and x2.sum() == 0):
+                
+                # 2. Try to load or calculate CWT if we need it
+                if 2 in self.active_branches and x3.sum() == 0:
+                    # We usually compute this from raw data, so we'll trigger raw data loading below
+                    pass
+
+                # 3. If we still need raw data (for branch 0, or to compute CWT/FFT)
+                if (0 in self.active_branches and x1.sum() == 0) or \
+                   (1 in self.active_branches and x2.sum() == 0) or \
+                   (2 in self.active_branches and x3.sum() == 0):
                     base_root = '/media/hira/SSD 4TB/EEG Datasets/experiment/nouman_conv_2/'
                     
                     found_npz = ""
@@ -95,6 +111,12 @@ class EEGDataset(Dataset):
                         if 1 in self.active_branches and x2.sum() == 0:
                             spec_list = [np.abs(stft(c, fs=200, nperseg=64, noverlap=32)[2])**2 for c in filtered]
                             x2 = torch.tensor(np.mean(np.stack(spec_list, axis=0), axis=0), dtype=torch.float32).unsqueeze(0)
+                        if 2 in self.active_branches and x3.sum() == 0:
+                            coeffs, _ = pywt.cwt(filtered, np.arange(1, 31), self.wavelet_type, sampling_period=1/200)
+                            if self.wavelet_type == 'cmor1.5-1.0':
+                                x3 = torch.tensor(np.abs(coeffs), dtype=torch.float32).squeeze(1).unsqueeze(0)
+                            else:
+                                x3 = torch.tensor(coeffs, dtype=torch.float32).squeeze(1).unsqueeze(0)
 
         else:
             # Baseline processing directly from .npz
@@ -107,10 +129,25 @@ class EEGDataset(Dataset):
                 spec_list = [np.abs(stft(c, fs=200, nperseg=64, noverlap=32)[2])**2 for c in filtered]
                 x2 = torch.tensor(np.mean(np.stack(spec_list, axis=0), axis=0), dtype=torch.float32).unsqueeze(0)
             if 2 in self.active_branches:
-                coeffs, _ = pywt.cwt(eeg_raw, np.arange(1, 31), self.wavelet_type, sampling_period=1/200)
-                if self.wavelet_type == 'cmor1.5-1.0':
-                    x3 = torch.tensor(np.abs(coeffs), dtype=torch.float32).squeeze(1).unsqueeze(0)
+                if self.wavelet_type == 'vmd':
+                    from preprocess_data import vmd_decompose
+                    x3 = torch.tensor(vmd_decompose(filtered, n_modes=5), dtype=torch.float32).unsqueeze(0)
+                elif self.wavelet_type == 'vmd_cwt' or self.wavelet_type == 'cmor1.5-1.0':
+                    # Fallback calculation if not precomputed
+                    imfs = vmd_decompose(filtered, n_modes=5) if self.wavelet_type == 'vmd_cwt' else [filtered]
+                    cwt_results = []
+                    for signal in imfs:
+                        coeffs, _ = pywt.cwt(signal, np.arange(1, 31), 'cmor1.5-1.0', sampling_period=1/200)
+                        cwt_results.append(np.abs(coeffs))
+                    avg_cwt = np.mean(np.stack(cwt_results, axis=0), axis=0) if len(cwt_results) > 1 else cwt_results[0]
+                    x3 = torch.tensor(avg_cwt, dtype=torch.float32).unsqueeze(0)
+                elif self.wavelet_type == 'vmd_feats':
+                    from preprocess_data import vmd_decompose, extract_vmd_features
+                    imfs = vmd_decompose(filtered, n_modes=5)
+                    feats = extract_vmd_features(imfs)
+                    x1 = torch.tensor(feats, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
                 else:
+                    coeffs, _ = pywt.cwt(eeg_raw, np.arange(1, 31), self.wavelet_type, sampling_period=1/200)
                     x3 = torch.tensor(coeffs, dtype=torch.float32).squeeze(1).unsqueeze(0)
                 
         # Shape correction
