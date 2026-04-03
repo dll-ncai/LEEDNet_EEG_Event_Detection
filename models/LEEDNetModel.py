@@ -15,38 +15,24 @@ class _EEGBackbone(nn.Module):
         self.conv1_t = nn.Sequential(
             nn.Conv2d(input_channels, 32, 3, padding=1),
             nn.BatchNorm2d(32),
-            nn.GELU(),
+            nn.ReLU(),
         )
         self.conv2_t = nn.Sequential(
             nn.Conv2d(32, 64, 3, padding=1),
             nn.BatchNorm2d(64),
-            nn.GELU(),
+            nn.ReLU(),
         )
         self.conv3_t = nn.Sequential(
             nn.Conv2d(64, 96, 3, padding=1),
             nn.BatchNorm2d(96),
-            nn.GELU(),
-            nn.Conv2d(96, 128, 3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.GELU(),
-            nn.Dropout2d(0.2),
+            nn.ReLU(),
         )
         self.conv4_t = nn.Sequential(
-            nn.Conv2d(128, 192, 3, padding=1),
-            nn.BatchNorm2d(192),
-            nn.GELU(),
-            nn.Conv2d(192, 256, 3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.GELU(),
-            nn.Dropout2d(0.2),
-        )
-        self.conv5_t = nn.Sequential(
-            nn.Conv2d(256, 1, 3, padding=1),
-            nn.BatchNorm2d(1),
-            nn.GELU(),
+            nn.Conv2d(96, 128, 3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
         )
 
-        # Gate along time axis (W). We'll pool/reshape to [B, H, W] with W == target_length.
         self.fusion_weights = nn.Sequential(
             nn.Linear(self.target_length, self.target_length // 2),
             nn.ReLU(),
@@ -102,7 +88,7 @@ class _EEGBackbone(nn.Module):
         x = self.conv2_t(x)
         x = self.conv3_t(x)
         x = self.conv4_t(x)
-        x = self.conv5_t(x)        # [B, 1, H, target_length]
+        # x = self.conv5_t(x)        # [B, 1, H, target_length]
 
         # --- Temporal gating and reduction ---
         x = x.squeeze(1)           # [B, H, target_length]
